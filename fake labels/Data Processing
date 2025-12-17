@@ -1,0 +1,79 @@
+import os
+import shutil
+from pathlib import Path
+
+# ===================== 配置参数（根据你的数据集路径修改） =====================
+# 伪标签目录（存储生成的.txt标签）
+PSEUDO_LABEL_DIR = r"E:\yolo12\yolov12-main\yolov12-main\data\train\labels"
+# 无标注图片目录（对应伪标签的图片）
+UNLABELED_IMG_DIR = r"E:\yolo12\yolov12-main\yolov12-main\data\train\images"
+# 支持的图片格式
+IMG_FORMATS = [".jpg", ".jpeg", ".png", ".bmp", ".JPG", ".PNG"]
+
+# ===================== 步骤1：删除空白标签+对应图片 =====================
+print("===== 步骤1：删除空白标签及对应图片 =====")
+# 遍历所有伪标签文件
+label_files = [f for f in Path(PSEUDO_LABEL_DIR).glob("*.txt")]
+empty_count = 0
+for label_file in label_files:
+    # 检查标签是否为空（文件大小为0 或 无有效行）
+    is_empty = True
+    try:
+        with open(label_file, "r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f.readlines() if line.strip()]
+            if lines:  # 有非空行则不是空白标签
+                is_empty = False
+    except Exception as e:
+        print(f"解析标签文件失败 {label_file}：{e}")
+
+    if is_empty:
+        empty_count += 1
+        # 1. 删除空白标签文件
+        os.remove(label_file)
+        print(f"删除空白标签：{label_file.name}")
+
+        # 2. 删除对应图片（遍历所有图片格式）
+        img_name = label_file.stem
+        for fmt in IMG_FORMATS:
+            img_path = Path(UNLABELED_IMG_DIR) / f"{img_name}{fmt}"
+            if img_path.exists():
+                os.remove(img_path)
+                print(f"  对应图片：{img_path.name}")
+                break
+print(f"共删除{empty_count}个空白标签及对应图片\n")
+
+# ===================== 步骤2：统一规范文件命名 =====================
+print("===== 步骤2：统一规范文件命名 =====")
+# 1. 获取剩余的有效图片（确保标签和图片一一对应）
+valid_imgs = []
+for img_file in Path(UNLABELED_IMG_DIR).glob("*"):
+    if img_file.suffix in IMG_FORMATS:
+        # 检查是否有对应标签
+        label_path = Path(PSEUDO_LABEL_DIR) / f"{img_file.stem}.txt"
+        if label_path.exists():
+            valid_imgs.append(img_file)
+
+# 2. 按顺序重命名（img_0001.jpg, img_0001.txt 格式）
+rename_count = 0
+for idx, img_file in enumerate(valid_imgs, start=1):
+    # 新文件名（4位数字，如0001、0002）
+    new_name = f"img_{idx:04d}"
+    img_suffix = img_file.suffix
+
+    # 重命名图片
+    new_img_path = Path(UNLABELED_IMG_DIR) / f"{new_name}{img_suffix}"
+    os.rename(img_file, new_img_path)
+
+    # 重命名对应标签
+    old_label_path = Path(PSEUDO_LABEL_DIR) / f"{img_file.stem}.txt"
+    new_label_path = Path(PSEUDO_LABEL_DIR) / f"{new_name}.txt"
+    os.rename(old_label_path, new_label_path)
+
+    rename_count += 1
+    print(f"重命名：{img_file.name} → {new_img_path.name}")
+    print(f"        {old_label_path.name} → {new_label_path.name}")
+
+print(f"\n===== 数据集整理完成 =====")
+print(f"剩余有效样本数：{rename_count}")
+print(f"标签目录：{PSEUDO_LABEL_DIR}")
+print(f"图片目录：{UNLABELED_IMG_DIR}")
