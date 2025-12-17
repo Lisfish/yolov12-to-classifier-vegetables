@@ -1,0 +1,49 @@
+import os
+import torch
+from ultralytics import YOLO
+from pathlib import Path
+
+# 配置参数
+PSEUDO_THRESHOLD = 0.7  # 伪标签置信度阈值（可调，如0.6~0.8）
+UNLABELED_IMG_DIR = 'E:/yolo12/yolov12-main/yolov12-main/data/train/images'  # 无标注图片目录
+PSEUDO_LABEL_DIR = 'E:/yolo12/yolov12-main/yolov12-main/data/train/labels'  # 伪标签输出目录
+WARMUP_MODEL_PATH = 'base.pt'  # 热身模型路径
+
+# 创建伪标签目录
+Path(PSEUDO_LABEL_DIR).mkdir(parents=True, exist_ok=True)
+
+# 加载热身模型
+model = YOLO(WARMUP_MODEL_PATH)
+model.to('cuda' if torch.cuda.is_available() else 'cpu')
+
+# 遍历无标注图片生成伪标签
+for img_path in Path(UNLABELED_IMG_DIR).glob('*.jpg'):  # 支持jpg/png等格式
+    # 推理（关闭augment，保证结果稳定）
+    results = model(str(img_path), augment=False, conf=PSEUDO_THRESHOLD)
+
+    # 提取预测框并生成YOLO格式标签
+    pseudo_label = []
+    for r in results:
+        boxes = r.boxes
+        if boxes is None:
+            continue
+        for box in boxes:
+            conf = box.conf.item()  # 获取框的置信度
+            if conf < 0.7:  # 直接过滤低置信度框
+                continue
+            cls = int(box.cls)
+            x1, y1, x2, y2 = box.xyxy[0]
+            img_h, img_w = r.orig_shape
+            # 归一化
+            x_c = (x1 + x2) / 2 / img_w
+            y_c = (y1 + y2) / 2 / img_h
+            w = (x2 - x1) / img_w
+            h = (y2 - y1) / img_h
+            pseudo_label.append(f'{cls} {x_c:.6f} {y_c:.6f} {w:.6f} {h:.6f}')
+
+    # 保存伪标签（无预测框则生成空文件）
+    label_path = Path(PSEUDO_LABEL_DIR) / img_path.with_suffix('.txt').name
+    with open(label_path, 'w') as f:
+        f.write('\n'.join(pseudo_label))
+
+print(f'伪标签生成完成，共处理 {len(list(Path(UNLABELED_IMG_DIR).glob("*.jpg")))} 张图片')
