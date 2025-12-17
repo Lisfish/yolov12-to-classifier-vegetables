@@ -1,0 +1,129 @@
+import os
+import cv2
+from pathlib import Path
+from PIL import Image
+import shutil
+
+
+def resize_images_pil(input_path, output_path, size=(512, 512)):
+    """
+    使用PIL库调整图片尺寸
+    """
+    # 创建输出文件夹
+    os.makedirs(output_path, exist_ok=True)
+
+    # 支持的图片格式
+    image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
+
+    # 遍历所有图片
+    input_path = Path(input_path)
+    for img_file in input_path.glob('*'):
+        if img_file.suffix.lower() in image_extensions:
+            try:
+                # 打开图片
+                with Image.open(img_file) as img:
+                    # 调整尺寸
+                    img_resized = img.resize(size, Image.Resampling.LANCZOS)
+
+                    # 保存图片
+                    output_file = os.path.join(output_path, img_file.name)
+                    img_resized.save(output_file)
+
+                    print(f"已处理: {img_file.name}")
+            except Exception as e:
+                print(f"处理 {img_file.name} 时出错: {e}")
+
+
+def resize_images_cv2(input_path, output_path, size=(512, 512)):
+    """
+    使用OpenCV调整图片尺寸
+    """
+    # 创建输出文件夹
+    os.makedirs(output_path, exist_ok=True)
+
+    # 支持的图片格式
+    image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
+
+    # 遍历所有图片
+    input_path = Path(input_path)
+    for img_file in input_path.glob('*'):
+        if img_file.suffix.lower() in image_extensions:
+            try:
+                # 读取图片
+                img = cv2.imread(str(img_file))
+                if img is not None:
+                    # 调整尺寸
+                    img_resized = cv2.resize(img, size, interpolation=cv2.INTER_AREA)
+
+                    # 保存图片
+                    output_file = os.path.join(output_path, img_file.name)
+                    cv2.imwrite(output_file, img_resized)
+
+                    print(f"已处理: {img_file.name}")
+            except Exception as e:
+                print(f"处理 {img_file.name} 时出错: {e}")
+
+
+def resize_with_aspect_ratio(input_path, output_path, size=(512, 512), keep_aspect=True):
+    """
+    保持宽高比调整图片尺寸
+    """
+    os.makedirs(output_path, exist_ok=True)
+
+    image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
+
+    for img_file in Path(input_path).glob('*'):
+        if img_file.suffix.lower() in image_extensions:
+            try:
+                with Image.open(img_file) as img:
+                    if keep_aspect:
+                        # 保持宽高比，用灰色填充
+                        img.thumbnail(size, Image.Resampling.LANCZOS)
+
+                        # 创建新图片
+                        new_img = Image.new('RGB', size, (128, 128, 128))
+
+                        # 计算位置居中放置
+                        img_w, img_h = img.size
+                        new_img.paste(img, ((size[0] - img_w) // 2,
+                                            (size[1] - img_h) // 2))
+
+                        new_img.save(os.path.join(output_path, img_file.name))
+                    else:
+                        # 直接拉伸
+                        img_resized = img.resize(size, Image.Resampling.LANCZOS)
+                        img_resized.save(os.path.join(output_path, img_file.name))
+
+                    print(f"已处理: {img_file.name}")
+            except Exception as e:
+                print(f"处理 {img_file.name} 时出错: {e}")
+
+
+# 主程序
+if __name__ == "__main__":
+    # 输入路径
+    input_path = r"E:\yolo12\yolov12-main\yolov12-main\data2\data2\data2\train\images"
+
+    # 输出路径
+    output_path = r"E:\yolo12\yolov12-main\yolov12-main\data2\data2\data2\train\images_resized_512"
+
+    # 选择方法
+    print("选择调整模式:")
+    print("1. 直接调整到512x512（可能变形）")
+    print("2. 保持宽高比调整，用灰色填充")
+
+    choice = input("请输入选择 (1 或 2): ")
+
+    if choice == "1":
+        # 方法1：直接调整
+        resize_images_pil(input_path, output_path, size=(512, 512))
+    elif choice == "2":
+        # 方法2：保持宽高比
+        resize_with_aspect_ratio(input_path, output_path, size=(512, 512), keep_aspect=True)
+    else:
+        print("无效选择，使用默认方法1")
+        resize_images_pil(input_path, output_path, size=(512, 512))
+
+    print(f"\n所有图片已处理完成!")
+    print(f"原始文件夹: {input_path}")
+    print(f"输出文件夹: {output_path}")
